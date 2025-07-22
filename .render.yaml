@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: business-card-ocr
+    env: python
+    buildCommand: ""
+    startCommand: streamlit run app.py --server.port 10000 --server.address 0.0.0.0
+    envVars:
+      - key: DB_HOST
+        value: dpg-d1vnkrndiees73brp680-a.oregon-postgres.render.com
+      - key: DB_PORT
+        value: 5432
+      - key: DB_NAME
+        value: client_jo5r
+      - key: DB_USER
+        value: priyanshu
+      - key: DB_PASSWORD
+        value: fw0lwMwJpbDYuTW9rwlBHB8w2HLAVoK8
