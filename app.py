@@ -88,12 +88,12 @@ st.title("📇 Business Card Extractor + PostgreSQL Viewer")
 tab1, tab2 = st.tabs(["📤 Upload & Extract", "📑 View Saved Data"])
 
 with tab1:
-    st.header("Upload a Business Card")
-    uploaded_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+    st.header("Capture Business Card")
+    camera_image = st.camera_input("Take a photo of the business card")
 
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Uploaded Business Card", use_container_width=True)
+    if camera_image is not None:
+        image = Image.open(camera_image).convert("RGB")
+        st.image(image, caption="Captured Business Card", use_container_width=True)
 
         with st.spinner("🔍 Extracting data..."):
             results = reader.readtext(np.array(image), detail=0)
@@ -119,6 +119,7 @@ with tab1:
         if st.button("💾 Save to Database"):
             if insert_into_db(data):
                 st.success("🎉 Data saved successfully!")
+
 
 with tab2:
     st.header("Saved Business Cards")
