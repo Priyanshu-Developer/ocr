@@ -5,13 +5,13 @@ from PIL import Image
 from sqlalchemy import create_engine
 import pandas as pd
 import numpy as np
-import os
 
-DB_HOST = os.environ.get("DB_HOST")
-DB_PORT = os.environ.get("DB_PORT")
-DB_NAME = os.environ.get("DB_NAME")
-DB_USER = os.environ.get("DB_USER")
-DB_PASSWORD = os.environ.get("DB_PASSWORD")
+# PostgreSQL connection details
+DB_HOST = "dpg-d1vnkrndiees73brp680-a.oregon-postgres.render.com"
+DB_PORT = 5432
+DB_NAME = "client_jo5r"
+DB_USER = "priyanshu"
+DB_PASSWORD = "fw0lwMwJpbDYuTW9rwlBHB8w2HLAVoK8"  # <-- Change this
 
 # SQLAlchemy Engine
 engine = create_engine(
