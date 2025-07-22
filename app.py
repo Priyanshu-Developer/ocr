@@ -6,8 +6,6 @@ from sqlalchemy import create_engine
 import pandas as pd
 import numpy as np
 
-
-
 # PostgreSQL connection details
 DB_HOST = "dpg-d1vnkrndiees73brp680-a.oregon-postgres.render.com"
 DB_PORT = 5432
@@ -78,6 +76,7 @@ def extract_email(text):
 def extract_phone(text):
     return re.findall(r'\+?\d[\d\s\-]{7,}\d', text)
 
+
 def extract_name(text_lines):
     for line in text_lines:
         words = line.split()
@@ -90,8 +89,24 @@ def extract_name(text_lines):
     return None
 
 
+
 # Streamlit UI
+st.set_page_config(page_title="📇 Business Card Extractor", layout="wide")
 st.title("📇 Business Card Extractor (PaddleOCR) + PostgreSQL Viewer")
+
+# Add custom CSS for larger camera canvas on mobile
+st.markdown("""
+    <style>
+        [data-testid="stCameraInput"] video {
+            width: 100% !important;
+            height: auto !important;
+        }
+        [data-testid="stImage"] img {
+            width: 100% !important;
+            height: auto !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 tab1, tab2 = st.tabs(["📤 Upload & Extract", "📑 View Saved Data"])
 
@@ -101,7 +116,7 @@ with tab1:
 
     if camera_image is not None:
         image = Image.open(camera_image).convert("RGB")
-        st.image(image, caption="Captured Business Card", use_container_width=True)
+        st.image(image, caption="📸 Captured Business Card", use_container_width=True)
 
         with st.spinner("🔍 Extracting data..."):
             text_lines = extract_text(np.array(image))
@@ -110,12 +125,13 @@ with tab1:
             name = extract_name(text_lines)
             email = extract_email(full_text)
             phones = extract_phone(full_text)
+           
 
             data = {
                 "name": name,
                 "email": email,
                 "phone_numbers": phones,
-             
+                
             }
 
         st.success("✅ Data Extracted:")
