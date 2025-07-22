@@ -1,0 +1,36 @@
+EXTRACTED INFORMATION
+==================================================
+
+Raw OCR Text:
+- 2
+- +91-9289259016
+- FIELD EXECUTIVE
+- SANJEEV KUMAR SINGH
+- SECURITY
+- CLIFF
+- SECTOR-1,VAISHALIGZB.201010
+- 555,5th FLOOR,CLOUD-9,
+- PVE.
+- Ltd
+- 2
+- 区
+- +91-7827985729
+- cc@clifsecurityservices.com
+- 
+- SECURIT
+
+Combined Text:
+2 +91-9289259016 FIELD EXECUTIVE SANJEEV KUMAR SINGH SECURITY CLIFF SECTOR-1,VAISHALIGZB.201010 555,5th FLOOR,CLOUD-9, PVE. Ltd 2 区 +91-7827985729 cc@clifsecurityservices.com  SECURIT
+
+Emails:
+- cc@clifsecurityservices.com
+
+Phone Numbers:
+- +91-7827985729
+- 9289259016
+- 7827985729
+- +91-9289259016
+
+Names:
+- SINGH SECURITY
+- KUMAR SINGH

@@ -1,10 +1,12 @@
-import streamlit as st
-import easyocr
 import re
+import streamlit as st
+from paddleocr import PaddleOCR
 from PIL import Image
 from sqlalchemy import create_engine
 import pandas as pd
 import numpy as np
+
+
 
 # PostgreSQL connection details
 DB_HOST = "dpg-d1vnkrndiees73brp680-a.oregon-postgres.render.com"
@@ -18,15 +20,22 @@ engine = create_engine(
     f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-# Initialize EasyOCR reader
+# Initialize PaddleOCR
 @st.cache_resource
-def load_reader():
-    return easyocr.Reader(['en'], gpu=False)
+def load_ocr():
+    return PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False
+    )
 
-reader = load_reader()
+ocr = load_ocr()
 
+# Common job-related keywords to exclude from names
+job_keywords = {'EXECUTIVE', 'MANAGER', 'ENGINEER', 'DIRECTOR', 'CEO',
+                'FOUNDER', 'OWNER', 'DEVELOPER', 'SECURITY', 'TECHNICIAN', 'STAFF', 'PVT', 'LTD', 'SERVICES'}
 
-
+# Database functions
 def insert_into_db(data):
     try:
         with engine.begin() as conn:
@@ -54,7 +63,14 @@ def fetch_all_records():
         st.error(f"❌ Could not fetch records: {e}")
         return pd.DataFrame()
 
-# Extraction Functions
+# Extraction functions (PaddleOCR-based)
+def extract_text(image_array):
+    results = ocr.predict(image_array)
+    text_lines = []
+    for result in results:
+        text_lines.extend(result['rec_texts'])
+    return text_lines
+
 def extract_email(text):
     match = re.search(r'[\w\.-]+@[\w\.-]+', text)
     return match.group(0) if match else None
@@ -62,28 +78,20 @@ def extract_email(text):
 def extract_phone(text):
     return re.findall(r'\+?\d[\d\s\-]{7,}\d', text)
 
-def extract_website(text):
-    match = re.search(r'((http(s)?://)?[\w\-]+\.\w{2,}(\.\w{2,})?)', text)
-    return match.group(0) if match else None
-
 def extract_name(text_lines):
     for line in text_lines:
-        if not any(char.isdigit() for char in line) and len(line.split()) >= 2:
-            return line
+        words = line.split()
+        if (
+            2 <= len(words) <= 4 and
+            all(w.isalpha() for w in words) and
+            not any(w.upper() in job_keywords for w in words)
+        ):
+            return line  # Return the first valid name
     return None
 
-def extract_address(text_lines):
-    possible = []
-    for line in reversed(text_lines):
-        if not re.search(r'@|www|\.com|\d{5,}', line):
-            possible.append(line)
-        if len(possible) >= 2:
-            break
-    return ", ".join(reversed(possible))
 
 # Streamlit UI
-st.title("📇 Business Card Extractor + PostgreSQL Viewer")
-
+st.title("📇 Business Card Extractor (PaddleOCR) + PostgreSQL Viewer")
 
 tab1, tab2 = st.tabs(["📤 Upload & Extract", "📑 View Saved Data"])
 
@@ -96,21 +104,18 @@ with tab1:
         st.image(image, caption="Captured Business Card", use_container_width=True)
 
         with st.spinner("🔍 Extracting data..."):
-            results = reader.readtext(np.array(image), detail=0)
-            full_text = "\n".join(results)
+            text_lines = extract_text(np.array(image))
+            full_text = "\n".join(text_lines)
 
-            name = extract_name(results)
+            name = extract_name(text_lines)
             email = extract_email(full_text)
             phones = extract_phone(full_text)
-            website = extract_website(full_text)
-            address = extract_address(results)
 
             data = {
                 "name": name,
                 "email": email,
                 "phone_numbers": phones,
-                "website": website,
-                "address": address
+             
             }
 
         st.success("✅ Data Extracted:")
@@ -119,7 +124,6 @@ with tab1:
         if st.button("💾 Save to Database"):
             if insert_into_db(data):
                 st.success("🎉 Data saved successfully!")
-
 
 with tab2:
     st.header("Saved Business Cards")
