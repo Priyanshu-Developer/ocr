@@ -1,150 +1,95 @@
-import re
 import streamlit as st
 from paddleocr import PaddleOCR
+from imageProcessing import process_image_complete
+from textProcessing import EnhancedBusinessCardParser
 from PIL import Image
-from sqlalchemy import create_engine
-import pandas as pd
-import numpy as np
+import tempfile
+import gc
 
-# PostgreSQL connection details
-DB_HOST = "dpg-d1vnkrndiees73brp680-a.oregon-postgres.render.com"
-DB_PORT = 5432
-DB_NAME = "client_jo5r"
-DB_USER = "priyanshu"
-DB_PASSWORD = "fw0lwMwJpbDYuTW9rwlBHB8w2HLAVoK8"  # <-- Change this
-
-# SQLAlchemy Engine
-engine = create_engine(
-    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Streamlit App Config
+st.set_page_config(
+    page_title="Business Card OCR",
+    layout="wide"
 )
 
-# Initialize PaddleOCR
+# Title
+st.title("📇 Business Card OCR")
+st.write("Capture or upload a business card to extract Name, Email, and Phone.")
+
+# Initialize PaddleOCR once
 @st.cache_resource
-def load_ocr():
+def get_ocr_instance():
+    st.info("⏳ Loading OCR models... please wait")
     return PaddleOCR(
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False
+        lang='en',
+        use_textline_orientation=True,
     )
 
-ocr = load_ocr()
+ocr = get_ocr_instance()
+parser = EnhancedBusinessCardParser()
 
-# Common job-related keywords to exclude from names
-job_keywords = {'EXECUTIVE', 'MANAGER', 'ENGINEER', 'DIRECTOR', 'CEO',
-                'FOUNDER', 'OWNER', 'DEVELOPER', 'SECURITY', 'TECHNICIAN', 'STAFF', 'PVT', 'LTD', 'SERVICES'}
+# Dynamic camera size based on device
+if st.session_state.get('mobile_view', False):
+    camera_width = 400  # Mobile
+    camera_height = 500
+else:
+    camera_width = 640  # Desktop
+    camera_height = 480
 
-# Database functions
-def insert_into_db(data):
-    try:
-        with engine.begin() as conn:
-            conn.execute("""
-                INSERT INTO business_cards (name, email, phone1, phone2, website, address)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                data["name"],
-                data["email"],
-                data["phone_numbers"][0] if len(data["phone_numbers"]) > 0 else None,
-                data["phone_numbers"][1] if len(data["phone_numbers"]) > 1 else None,
-                data["website"],
-                data["address"]
-            ))
-        return True
-    except Exception as e:
-        st.error(f"❌ Database Error (insert): {e}")
-        return False
+# Toggle for mobile view
+mobile_view = st.checkbox("📱 Mobile View (bigger camera)", value=False, key='mobile_view')
 
-def fetch_all_records():
-    try:
-        df = pd.read_sql("SELECT * FROM business_cards ORDER BY id DESC", engine)
-        return df
-    except Exception as e:
-        st.error(f"❌ Could not fetch records: {e}")
-        return pd.DataFrame()
+# Camera input
+captured_image = st.camera_input(
+    "📸 Capture Business Card",
+    key="camera_input",
+    help="Use your device's camera to take a picture of the business card.",
+)
 
-# Extraction functions (PaddleOCR-based)
-def extract_text(image_array):
-    results = ocr.predict(image_array)
-    text_lines = []
-    for result in results:
-        text_lines.extend(result['rec_texts'])
-    return text_lines
+# OR Upload
+uploaded_file = st.file_uploader(
+    "📁 Or Upload an Image",
+    type=['png', 'jpg', 'jpeg'],
+    accept_multiple_files=False
+)
 
-def extract_email(text):
-    match = re.search(r'[\w\.-]+@[\w\.-]+', text)
-    return match.group(0) if match else None
+# Select input source
+input_image = None
+if captured_image is not None:
+    input_image = Image.open(captured_image)
+elif uploaded_file is not None:
+    input_image = Image.open(uploaded_file)
 
-def extract_phone(text):
-    return re.findall(r'\+?\d[\d\s\-]{7,}\d', text)
+# Process button
+if input_image:
+    st.image(input_image, caption="Uploaded Image", use_column_width=True)
+    if st.button("🔍 Process Image"):
+        # Save image to a temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            input_image.save(temp_file.name)
+            temp_file_path = temp_file.name
 
+        try:
+            # Run OCR
+            with st.spinner("Running OCR..."):
+                ocr_result = process_image_complete(temp_file_path, ocr)
 
-def extract_name(text_lines):
-    for line in text_lines:
-        words = line.split()
-        if (
-            2 <= len(words) <= 4 and
-            all(w.isalpha() for w in words) and
-            not any(w.upper() in job_keywords for w in words)
-        ):
-            return line  # Return the first valid name
-    return None
+                if not ocr_result['success']:
+                    st.error(f"OCR failed: {ocr_result['error']}")
+                else:
+                    # Parse results
+                    parsed_data = parser.extract_info(ocr_result['extracted_texts'])
+                    st.success("✅ Text extraction successful!")
+                    st.json(parsed_data)
 
+        except Exception as e:
+            st.error(f"Error during OCR: {str(e)}")
 
+        finally:
+            # Clean up temp file
+            gc.collect()
+            temp_file.close()
 
-# Streamlit UI
-st.set_page_config(page_title="📇 Business Card Extractor", layout="wide")
-st.title("📇 Business Card Extractor (PaddleOCR) + PostgreSQL Viewer")
+else:
+    st.info("📌 Capture or upload an image to start OCR.")
 
-# Add custom CSS for larger camera canvas on mobile
-st.markdown("""
-    <style>
-        [data-testid="stCameraInput"] video {
-            width: 100% !important;
-            height: auto !important;
-        }
-        [data-testid="stImage"] img {
-            width: 100% !important;
-            height: auto !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-tab1, tab2 = st.tabs(["📤 Upload & Extract", "📑 View Saved Data"])
-
-with tab1:
-    st.header("Capture Business Card")
-    camera_image = st.camera_input("Take a photo of the business card")
-
-    if camera_image is not None:
-        image = Image.open(camera_image).convert("RGB")
-        st.image(image, caption="📸 Captured Business Card", use_container_width=True)
-
-        with st.spinner("🔍 Extracting data..."):
-            text_lines = extract_text(np.array(image))
-            full_text = "\n".join(text_lines)
-
-            name = extract_name(text_lines)
-            email = extract_email(full_text)
-            phones = extract_phone(full_text)
-           
-
-            data = {
-                "name": name,
-                "email": email,
-                "phone_numbers": phones,
-                
-            }
-
-        st.success("✅ Data Extracted:")
-        st.write(pd.DataFrame([data]))
-
-        if st.button("💾 Save to Database"):
-            if insert_into_db(data):
-                st.success("🎉 Data saved successfully!")
-
-with tab2:
-    st.header("Saved Business Cards")
-    records_df = fetch_all_records()
-    if not records_df.empty:
-        st.dataframe(records_df, use_container_width=True)
-    else:
-        st.info("No records found. Upload and save a card first.")
